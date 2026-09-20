@@ -10,12 +10,9 @@ const escapeHtml = (value: string) =>
     .replaceAll(">", "&gt;");
 
 export const GET = (request: NextRequest) => {
+  // This route exists only on the Vercel-protected setup preview.
+  // OPENREVIEW_SETUP_STATE still protects both GitHub callbacks against CSRF.
   const state = getSetupState();
-  const key = request.nextUrl.searchParams.get("key");
-
-  if (key !== state) {
-    return new NextResponse("Not found", { status: 404 });
-  }
 
   const setupOrigin = request.nextUrl.origin;
   const productionOrigin = "https://openreview-selfhost.vercel.app";
@@ -43,7 +40,7 @@ export const GET = (request: NextRequest) => {
 <html lang="en">
 <head><meta charset="utf-8"><title>OpenReview GitHub App Setup</title></head>
 <body>
-  <p>Redirecting to GitHub to create the OpenReview App…</p>
+  <p>Redirecting to GitHub to create the private OpenReview App…</p>
   <form id="setup" action="https://github.com/settings/apps/new?state=${encodeURIComponent(state)}" method="post">
     <input type="hidden" name="manifest" value="${escapeHtml(JSON.stringify(manifest))}">
     <button type="submit">Continue to GitHub</button>
