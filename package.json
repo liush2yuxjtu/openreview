@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "bun scripts/verify-github-app-auth.mjs && next build",
     "start": "next start",
     "check": "ultracite check",
     "fix": "ultracite fix"
