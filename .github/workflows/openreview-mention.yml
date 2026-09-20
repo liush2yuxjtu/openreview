@@ -17,12 +17,52 @@ jobs:
       github.event.comment.user.type != 'Bot' &&
       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     steps:
-      - name: Delegate review to CodeRabbit
+      - name: Request OpenReview
         env:
           GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.issue.number }}
+          INSTRUCTIONS: ${{ github.event.comment.body }}
         run: |
-          gh pr comment "$PR_NUMBER"             --repo "${{ github.repository }}"             --body $'@coderabbitai review\n\n_OpenReview trigger bridge_'
+          set +e
+          response="$(curl --silent --show-error \
+            --max-time 540 \
+            --write-out $'\n%{http_code}' \
+            --request POST \
+            --url 'https://openreview-selfhost.vercel.app/api/action-review' \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --header 'User-Agent: openreview-github-action' \
+            --data "$(jq -n \
+              --arg repository "$REPOSITORY" \
+              --argjson prNumber "$PR_NUMBER" \
+              --arg instructions "$INSTRUCTIONS" \
+              '{repository:$repository,prNumber:$prNumber,instructions:$instructions}')")"
+          curl_exit=$?
+          set -e
+
+          if [ "$curl_exit" -ne 0 ]; then
+            gh pr comment "$PR_NUMBER" --repo "$REPOSITORY" \
+              --body "OpenReview could not reach its review service. Check the OpenReview production runtime logs."
+            exit "$curl_exit"
+          fi
+
+          body="${response%$'\n'*}"
+          status="${response##*$'\n'}"
+
+          if [ "$status" -ge 400 ]; then
+            if printf '%s' "$body" | grep -q 'credit card\|customer_verification_required'; then
+              gh pr comment "$PR_NUMBER" --repo "$REPOSITORY" \
+                --body "OpenReview is installed and the trigger fired, but the model call is blocked until Vercel AI Gateway billing verification is completed."
+            else
+              gh pr comment "$PR_NUMBER" --repo "$REPOSITORY" \
+                --body "OpenReview was triggered, but the review service returned HTTP $status. Check the Vercel runtime logs for this run."
+            fi
+            printf '%s\n' "$body"
+            exit 1
+          fi
+
+          printf '%s\n' "$body"
