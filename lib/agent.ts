@@ -1,7 +1,6 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { DurableAgent } from "@workflow/ai/agent";
 
-import { env } from "@/lib/env";
 import type { SkillMetadata } from "@/lib/skills";
 import { buildSkillsPrompt } from "@/lib/skills";
 import { createBashTool } from "@/lib/tools/bash";
@@ -10,16 +9,21 @@ import { createReadFileTool } from "@/lib/tools/read-file";
 import { createReplyTool } from "@/lib/tools/reply";
 import { createWriteFileTool } from "@/lib/tools/write-file";
 
-const deepseek = (modelId: string) => async () => {
+async function createDeepSeekModel() {
   "use step";
 
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) {
+    throw new Error("Missing DEEPSEEK_API_KEY");
+  }
+
   const provider = createOpenAI({
-    apiKey: env.DEEPSEEK_API_KEY,
-    baseURL: env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com",
+    apiKey,
+    baseURL: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com",
   });
 
-  return provider(modelId);
-};
+  return provider(process.env.DEEPSEEK_MODEL ?? "deepseek-flash");
+}
 
 const instructions = `You are an expert software engineering assistant working inside a sandbox with a git repository checked out on a PR branch.
 
@@ -92,7 +96,7 @@ export const createAgent = (
     .join("\n\n");
 
   return new DurableAgent({
-    model: deepseek(env.DEEPSEEK_MODEL ?? "deepseek-flash"),
+    model: createDeepSeekModel,
     system,
     tools: {
       bash: createBashTool(sandboxId),
