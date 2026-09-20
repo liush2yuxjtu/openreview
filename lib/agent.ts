@@ -1,5 +1,5 @@
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { DurableAgent } from "@workflow/ai/agent";
+import { openai } from "@workflow/ai/providers/openai";
 
 import { env } from "@/lib/env";
 import type { SkillMetadata } from "@/lib/skills";
@@ -10,11 +10,9 @@ import { createReadFileTool } from "@/lib/tools/read-file";
 import { createReplyTool } from "@/lib/tools/reply";
 import { createWriteFileTool } from "@/lib/tools/write-file";
 
-const deepseek = createOpenAICompatible({
-  name: "deepseek",
+const deepseek = openai({
   apiKey: env.DEEPSEEK_API_KEY,
   baseURL: env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com",
-  includeUsage: true,
 });
 
 const instructions = `You are an expert software engineering assistant working inside a sandbox with a git repository checked out on a PR branch.
