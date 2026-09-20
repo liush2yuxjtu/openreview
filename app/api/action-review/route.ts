@@ -13,6 +13,78 @@ const githubHeaders = (token: string, accept = "application/vnd.github+json") =>
   "X-GitHub-Api-Version": "2022-11-28",
 });
 
+const reviewerSystem = `You are OpenReview, a careful pull-request reviewer.
+Review only the supplied pull request diff and context.
+Focus on concrete correctness bugs, security issues, runtime failures, data loss, race conditions, and missing error handling.
+Do not nitpick formatting or style.
+Do not claim you ran tests unless the supplied evidence says so.
+If you find issues, give concise findings with file/line references when possible, impact, and a specific fix.
+If you find no blocking issue, say so clearly and mention any verification gap.
+Return Markdown suitable for a GitHub pull-request review.`;
+
+const reviewWithDeepSeek = async (prompt: string) => {
+  const apiKey =
+    process.env.DEEPSEEK_API_KEY?.trim() ||
+    process.env.DEEPSEEK_AUTH_TOKEN?.trim();
+
+  if (!apiKey) {
+    return null;
+  }
+
+  const baseUrl = (
+    process.env.DEEPSEEK_BASE_URL?.trim() || "https://api.deepseek.com"
+  ).replace(/\/$/, "");
+  const model = process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
+
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: reviewerSystem },
+        { role: "user", content: prompt },
+      ],
+      max_tokens: 2_000,
+      temperature: 0.2,
+      stream: false,
+    }),
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(
+      `DeepSeek review failed: HTTP ${response.status} ${detail.slice(0, 500)}`
+    );
+  }
+
+  const payload = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  const text = payload.choices?.[0]?.message?.content?.trim();
+
+  if (!text) {
+    throw new Error("DeepSeek review returned no text");
+  }
+
+  return { provider: `DeepSeek ${model}`, text };
+};
+
+const reviewWithGateway = async (prompt: string) => {
+  const { text } = await generateText({
+    model: "anthropic/claude-sonnet-4.6",
+    maxOutputTokens: 2_000,
+    system: reviewerSystem,
+    prompt,
+  });
+
+  return { provider: "Vercel AI Gateway · Claude Sonnet 4.6", text };
+};
+
 export const POST = async (request: NextRequest) => {
   const authorization = request.headers.get("authorization");
   if (!authorization?.startsWith("Bearer ")) {
@@ -28,7 +100,8 @@ export const POST = async (request: NextRequest) => {
 
   const repository = body.repository?.trim();
   const prNumber = Number(body.prNumber);
-  const instructions = body.instructions?.trim().slice(0, 4_000) ?? "Review this pull request.";
+  const instructions =
+    body.instructions?.trim().slice(0, 4_000) ?? "Review this pull request.";
 
   if (!repository || !Number.isInteger(prNumber) || prNumber <= 0) {
     return NextResponse.json({ error: "Invalid review request" }, { status: 400 });
@@ -77,18 +150,7 @@ export const POST = async (request: NextRequest) => {
       ? `${rawDiff.slice(0, maxDiffLength)}\n\n[diff truncated]`
       : rawDiff;
 
-  const { text } = await generateText({
-    model: "anthropic/claude-sonnet-4.6",
-    maxOutputTokens: 2_000,
-    system: `You are OpenReview, a careful pull-request reviewer.
-Review only the supplied pull request diff and context.
-Focus on concrete correctness bugs, security issues, runtime failures, data loss, race conditions, and missing error handling.
-Do not nitpick formatting or style.
-Do not claim you ran tests unless the supplied evidence says so.
-If you find issues, give concise findings with file/line references when possible, impact, and a specific fix.
-If you find no blocking issue, say so clearly and mention any verification gap.
-Return Markdown suitable for a GitHub pull-request review.`,
-    prompt: `Repository: ${repository}
+  const prompt = `Repository: ${repository}
 PR: #${prNumber}
 Title: ${pr.title}
 Base: ${pr.base.ref}
@@ -101,13 +163,16 @@ PR description:
 ${pr.body ?? "(none)"}
 
 Diff:
-${diff}`,
-  });
+${diff}`;
 
-  const reviewBody = `${text.trim()}
+  // Prefer the user's existing DeepSeek BYOK. This avoids Vercel AI Gateway
+  // billing/verification requirements. Gateway remains a fallback only.
+  const result = (await reviewWithDeepSeek(prompt)) ?? (await reviewWithGateway(prompt));
+
+  const reviewBody = `${result.text.trim()}
 
 ---
-*OpenReview · Vercel AI Gateway · triggered by @openreview*`;
+*OpenReview · ${result.provider} · triggered by @openreview*`;
 
   const reviewResponse = await fetch(`${prApi}/reviews`, {
     method: "POST",
@@ -129,10 +194,14 @@ ${diff}`,
     );
   }
 
-  const review = (await reviewResponse.json()) as { html_url?: string; id?: number };
+  const review = (await reviewResponse.json()) as {
+    html_url?: string;
+    id?: number;
+  };
 
   return NextResponse.json({
     ok: true,
+    provider: result.provider,
     reviewId: review.id,
     reviewUrl: review.html_url,
   });
