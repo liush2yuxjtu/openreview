@@ -1,5 +1,6 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { DurableAgent } from "@workflow/ai/agent";
+import type { CompatibleLanguageModel } from "@workflow/ai/agent";
 
 import type { SkillMetadata } from "@/lib/skills";
 import { buildSkillsPrompt } from "@/lib/skills";
@@ -22,7 +23,7 @@ async function createDeepSeekModel() {
     baseURL: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com",
   });
 
-  return provider(process.env.DEEPSEEK_MODEL ?? "deepseek-flash");
+  return provider(process.env.DEEPSEEK_MODEL ?? "deepseek-flash") as unknown as CompatibleLanguageModel;
 }
 
 const instructions = `You are an expert software engineering assistant working inside a sandbox with a git repository checked out on a PR branch.
