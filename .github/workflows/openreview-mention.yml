@@ -6,7 +6,7 @@ on:
 
 permissions:
   contents: read
-  issues: read
+  issues: write
   pull-requests: write
 
 jobs:
@@ -17,42 +17,12 @@ jobs:
       github.event.comment.user.type != 'Bot' &&
       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
 
     steps:
-      - name: Request OpenReview
+      - name: Delegate review to CodeRabbit
         env:
           GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.issue.number }}
-          INSTRUCTIONS: ${{ github.event.comment.body }}
         run: |
-          python3 - <<'PY'
-          import json
-          import os
-          import urllib.request
-
-          payload = json.dumps({
-              "repository": os.environ["REPOSITORY"],
-              "prNumber": int(os.environ["PR_NUMBER"]),
-              "instructions": os.environ["INSTRUCTIONS"],
-          }).encode()
-
-          request = urllib.request.Request(
-              "https://openreview-selfhost.vercel.app/api/action-review",
-              data=payload,
-              headers={
-                  "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
-                  "Content-Type": "application/json",
-                  "User-Agent": "openreview-github-action",
-              },
-              method="POST",
-          )
-
-          with urllib.request.urlopen(request, timeout=540) as response:
-              result = json.load(response)
-              print(json.dumps({
-                  "ok": result.get("ok"),
-                  "reviewUrl": result.get("reviewUrl"),
-              }))
-          PY
+          gh pr comment "$PR_NUMBER"             --repo "${{ github.repository }}"             --body $'@coderabbitai review\n\n_OpenReview trigger bridge_'
