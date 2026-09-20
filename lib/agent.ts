@@ -1,5 +1,5 @@
 import { DurableAgent } from "@workflow/ai/agent";
-import { openai } from "@workflow/ai/providers/openai";
+import { openai } from "@workflow/ai/openai";
 
 import { env } from "@/lib/env";
 import type { SkillMetadata } from "@/lib/skills";
