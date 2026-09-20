@@ -34,7 +34,15 @@ const reviewWithDeepSeek = async (prompt: string) => {
   const baseUrl = (
     process.env.DEEPSEEK_BASE_URL?.trim() || "https://api.deepseek.com"
   ).replace(/\/$/, "");
-  const model = process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
+  const configuredModel = process.env.DEEPSEEK_MODEL?.trim();
+  const model =
+    !configuredModel ||
+    configuredModel === "deepseek-chat" ||
+    configuredModel === "deepseek-reasoner" ||
+    configuredModel === "deepseek-v4-flash" ||
+    configuredModel === "deepseek-v4-flash-vision-exp"
+      ? "deepseek-flash"
+      : configuredModel;
 
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
