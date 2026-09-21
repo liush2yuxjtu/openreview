@@ -18,11 +18,15 @@ const repairWebhookSecret = async (deliveryGuid: string): Promise<void> => {
     return;
   }
 
+  let repairStep = "delay";
+
   try {
     // Let GitHub finish recording the failed delivery before looking it up.
     await delay(750);
 
+    repairStep = "get-app";
     const app = getGitHubApp();
+    repairStep = "list-deliveries";
     const { data: deliveries } = await app.octokit.request(
       "GET /app/hook/deliveries",
       {
@@ -41,6 +45,7 @@ const repairWebhookSecret = async (deliveryGuid: string): Promise<void> => {
       return;
     }
 
+    repairStep = "patch-hook";
     await app.octokit.request("PATCH /app/hook/config", {
       content_type: "json",
       headers: {
@@ -51,6 +56,7 @@ const repairWebhookSecret = async (deliveryGuid: string): Promise<void> => {
       url: webhookUrl,
     });
 
+    repairStep = "redeliver";
     await app.octokit.request(
       "POST /app/hook/deliveries/{delivery_id}/attempts",
       {
@@ -76,7 +82,13 @@ const repairWebhookSecret = async (deliveryGuid: string): Promise<void> => {
         ? error.status
         : undefined;
 
-    console.error("[openreview-webhook-auth] repair failed", { status });
+    const errorName = error instanceof Error ? error.name : typeof error;
+
+    console.error("[openreview-webhook-auth] repair failed", {
+      errorName,
+      repairStep,
+      status,
+    });
   }
 };
 
