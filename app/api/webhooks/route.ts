@@ -14,7 +14,22 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     );
   }
 
-  return handler(request, {
+  const response = (await handler(request, {
     waitUntil: (task) => after(() => task),
-  }) as Promise<NextResponse>;
+  })) as NextResponse;
+
+  if (response.status === 401) {
+    const userAgent = request.headers.get("user-agent");
+
+    console.warn("[openreview-webhook-auth]", {
+      event: request.headers.get("x-github-event"),
+      hasDeliveryId: Boolean(request.headers.get("x-github-delivery")),
+      hasSignature256: Boolean(request.headers.get("x-hub-signature-256")),
+      signature256Length:
+        request.headers.get("x-hub-signature-256")?.length ?? 0,
+      isGitHubHookshot: userAgent?.startsWith("GitHub-Hookshot/") ?? false,
+    });
+  }
+
+  return response;
 };
