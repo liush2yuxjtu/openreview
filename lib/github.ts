@@ -30,29 +30,32 @@ const normalizeGitHubPrivateKey = (value: string): string => {
 
   if (!key.includes("-----BEGIN") && /^[A-Za-z0-9+/=\s]+$/.test(key)) {
     try {
-      const decoded = Buffer.from(key.replaceAll(/\s/g, ""), "base64")
-        .toString("utf8")
-        .trim();
+      const compact = key.replace(/\s/g, "");
+      const decoded = Buffer.from(compact, "base64");
+      const decodedText = decoded.toString("utf8").trim();
 
       if (
-        decoded.includes("-----BEGIN") &&
-        decoded.includes("PRIVATE KEY-----")
+        decodedText.includes("-----BEGIN") &&
+        decodedText.includes("PRIVATE KEY-----")
       ) {
-        key = decoded.replaceAll("\r\n", "\n");
+        key = decodedText.replaceAll("\r\n", "\n");
+      } else if (decoded.length >= 512 && decoded[0] === 0x30) {
+        const body = compact.match(/.{1,64}/g)?.join("\n") ?? compact;
+        key = `-----BEGIN RSA PRIVATE KEY-----\n${body}\n-----END RSA PRIVATE KEY-----`;
       }
     } catch {
       // Fall through to the PEM validation below.
     }
   }
 
-  const hasPrivateKeyHeader =
-    key.startsWith("-----BEGIN PRIVATE KEY-----") ||
-    key.startsWith("-----BEGIN RSA PRIVATE KEY-----");
-  const hasPrivateKeyFooter =
-    key.endsWith("-----END PRIVATE KEY-----") ||
+  const isPkcs8 =
+    key.startsWith("-----BEGIN PRIVATE KEY-----") &&
+    key.endsWith("-----END PRIVATE KEY-----");
+  const isPkcs1 =
+    key.startsWith("-----BEGIN RSA PRIVATE KEY-----") &&
     key.endsWith("-----END RSA PRIVATE KEY-----");
 
-  if (!(hasPrivateKeyHeader && hasPrivateKeyFooter)) {
+  if (!(isPkcs8 || isPkcs1)) {
     throw new Error(
       "Invalid GITHUB_APP_PRIVATE_KEY format: expected a complete PEM private key"
     );
