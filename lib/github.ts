@@ -6,7 +6,7 @@ import { env } from "@/lib/env";
 
 let app: App | null = null;
 
-const normalizeGitHubPrivateKey = (value: string): string => {
+export const normalizeGitHubPrivateKey = (value: string): string => {
   let key = value.trim();
 
   if (key.startsWith('"') && key.endsWith('"')) {
@@ -30,7 +30,7 @@ const normalizeGitHubPrivateKey = (value: string): string => {
 
   if (!key.includes("-----BEGIN") && /^[A-Za-z0-9+/=\s]+$/.test(key)) {
     try {
-      const compact = key.replace(/\s/g, "");
+      const compact = key.replaceAll(/\s/g, "");
       const decoded = Buffer.from(compact, "base64");
       const decodedText = decoded.toString("utf8").trim();
 

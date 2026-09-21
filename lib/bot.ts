@@ -11,7 +11,11 @@ import { env } from "@/lib/env";
 import { botWorkflow } from "@/workflow";
 import type { ThreadMessage, WorkflowParams } from "@/workflow";
 
-import { getAppInfo, getInstallationOctokit } from "./github";
+import {
+  getAppInfo,
+  getInstallationOctokit,
+  normalizeGitHubPrivateKey,
+} from "./github";
 
 const collectMessages = async (
   thread: Thread<unknown, unknown>
@@ -100,7 +104,7 @@ const initBot = async (): Promise<Chat> => {
         appId: env.GITHUB_APP_ID,
         botUserId: appInfo.botUserId,
         installationId: env.GITHUB_APP_INSTALLATION_ID,
-        privateKey: env.GITHUB_APP_PRIVATE_KEY.replaceAll("\\n", "\n"),
+        privateKey: normalizeGitHubPrivateKey(env.GITHUB_APP_PRIVATE_KEY),
         userName: appInfo.slug,
         webhookSecret: env.GITHUB_APP_WEBHOOK_SECRET,
       }),
