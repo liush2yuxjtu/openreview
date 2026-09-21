@@ -47,13 +47,15 @@ const repairWebhookSecret = async (deliveryGuid: string): Promise<void> => {
 
     repairStep = "patch-hook";
     await app.octokit.request("PATCH /app/hook/config", {
-      content_type: "json",
+      data: {
+        content_type: "json",
+        insecure_ssl: "0",
+        secret,
+        url: webhookUrl,
+      },
       headers: {
         "x-github-api-version": "2026-03-10",
       },
-      insecure_ssl: "0",
-      secret,
-      url: webhookUrl,
     });
 
     repairStep = "redeliver";
