@@ -1,3 +1,4 @@
+import { createDeepSeek } from "@ai-sdk/deepseek";
 import { DurableAgent } from "@workflow/ai/agent";
 
 import type { SkillMetadata } from "@/lib/skills";
@@ -7,6 +8,36 @@ import { createLoadSkillTool } from "@/lib/tools/load-skill";
 import { createReadFileTool } from "@/lib/tools/read-file";
 import { createReplyTool } from "@/lib/tools/reply";
 import { createWriteFileTool } from "@/lib/tools/write-file";
+
+const createNativeReviewModel = async () => {
+  const apiKey =
+    process.env.DEEPSEEK_API_KEY?.trim() ||
+    process.env.DEEPSEEK_AUTH_TOKEN?.trim();
+
+  if (!apiKey) {
+    throw new Error("DeepSeek API key is not configured");
+  }
+
+  const baseURL = (
+    process.env.DEEPSEEK_BASE_URL?.trim() || "https://api.deepseek.com"
+  ).replace(/\/$/, "");
+  const configuredModel = process.env.DEEPSEEK_MODEL?.trim();
+  const model =
+    !configuredModel ||
+    configuredModel === "deepseek-chat" ||
+    configuredModel === "deepseek-reasoner" ||
+    configuredModel === "deepseek-v4-flash" ||
+    configuredModel === "deepseek-v4-flash-vision-exp"
+      ? "deepseek-flash"
+      : configuredModel;
+
+  const deepseek = createDeepSeek({
+    apiKey,
+    baseURL,
+  });
+
+  return deepseek(model);
+};
 
 const instructions = `You are an expert software engineering assistant working inside a sandbox with a git repository checked out on a PR branch.
 
@@ -79,7 +110,7 @@ export const createAgent = (
     .join("\n\n");
 
   return new DurableAgent({
-    model: "anthropic/claude-sonnet-4.6",
+    model: createNativeReviewModel,
     system,
     tools: {
       bash: createBashTool(sandboxId),
