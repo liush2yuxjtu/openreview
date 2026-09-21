@@ -111,6 +111,7 @@ const initBot = async (): Promise<Chat> => {
   });
 
   botInstance.onNewMention(handleMention);
+  botInstance.onNewMessage(/@openreview(?![\w-])/i, handleMention);
 
   botInstance.onSubscribedMessage(async (thread, message) => {
     if (!message.isMention) {
