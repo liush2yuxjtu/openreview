@@ -1,3 +1,5 @@
+import { setTimeout as delay } from "node:timers/promises";
+
 import { after, NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
@@ -10,51 +12,61 @@ const webhookUrl = "https://openreview-selfhost.vercel.app/api/webhooks";
 const repairWebhookSecret = async (deliveryGuid: string): Promise<void> => {
   const secret = env.GITHUB_APP_WEBHOOK_SECRET;
   if (!secret) {
-    console.error("[openreview-webhook-auth] repair skipped: missing webhook secret");
+    console.error(
+      "[openreview-webhook-auth] repair skipped: missing webhook secret"
+    );
     return;
   }
 
   try {
     // Let GitHub finish recording the failed delivery before looking it up.
-    await new Promise((resolve) => setTimeout(resolve, 750));
+    await delay(750);
 
     const app = getGitHubApp();
     const { data: deliveries } = await app.octokit.request(
       "GET /app/hook/deliveries",
       {
+        headers: {
+          "x-github-api-version": "2026-03-10",
+        },
         per_page: 30,
+      }
+    );
+
+    const delivery = deliveries.find((item) => item.guid === deliveryGuid);
+    if (!delivery) {
+      console.warn(
+        "[openreview-webhook-auth] repair skipped: delivery not found"
+      );
+      return;
+    }
+
+    await app.octokit.request("PATCH /app/hook/config", {
+      content_type: "json",
+      headers: {
+        "x-github-api-version": "2026-03-10",
+      },
+      insecure_ssl: "0",
+      secret,
+      url: webhookUrl,
+    });
+
+    await app.octokit.request(
+      "POST /app/hook/deliveries/{delivery_id}/attempts",
+      {
+        delivery_id: delivery.id,
         headers: {
           "x-github-api-version": "2026-03-10",
         },
       }
     );
 
-    const delivery = deliveries.find((item) => item.guid === deliveryGuid);
-    if (!delivery) {
-      console.warn("[openreview-webhook-auth] repair skipped: delivery not found");
-      return;
-    }
-
-    await app.octokit.request("PATCH /app/hook/config", {
-      url: webhookUrl,
-      content_type: "json",
-      secret,
-      insecure_ssl: "0",
-      headers: {
-        "x-github-api-version": "2026-03-10",
-      },
-    });
-
-    await app.octokit.request("POST /app/hook/deliveries/{delivery_id}/attempts", {
-      delivery_id: delivery.id,
-      headers: {
-        "x-github-api-version": "2026-03-10",
-      },
-    });
-
-    console.warn("[openreview-webhook-auth] webhook secret synchronized and redelivery requested", {
-      deliveryId: delivery.id,
-    });
+    console.warn(
+      "[openreview-webhook-auth] webhook secret synchronized and redelivery requested",
+      {
+        deliveryId: delivery.id,
+      }
+    );
   } catch (error) {
     const status =
       typeof error === "object" &&
@@ -86,19 +98,16 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
   if (response.status === 401) {
     const userAgent = request.headers.get("user-agent");
     const deliveryGuid = request.headers.get("x-github-delivery");
-    const hasSignature256 = Boolean(
-      request.headers.get("x-hub-signature-256")
-    );
-    const isGitHubHookshot =
-      userAgent?.startsWith("GitHub-Hookshot/") ?? false;
+    const hasSignature256 = Boolean(request.headers.get("x-hub-signature-256"));
+    const isGitHubHookshot = userAgent?.startsWith("GitHub-Hookshot/") ?? false;
 
     console.warn("[openreview-webhook-auth]", {
       event: request.headers.get("x-github-event"),
       hasDeliveryId: Boolean(deliveryGuid),
       hasSignature256,
+      isGitHubHookshot,
       signature256Length:
         request.headers.get("x-hub-signature-256")?.length ?? 0,
-      isGitHubHookshot,
     });
 
     if (deliveryGuid && hasSignature256 && isGitHubHookshot) {
