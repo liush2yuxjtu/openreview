@@ -9,7 +9,9 @@ import { createReadFileTool } from "@/lib/tools/read-file";
 import { createReplyTool } from "@/lib/tools/reply";
 import { createWriteFileTool } from "@/lib/tools/write-file";
 
-const createNativeReviewModel = async () => {
+const createNativeReviewModel = () => async () => {
+  "use step";
+
   const apiKey =
     process.env.DEEPSEEK_API_KEY?.trim() ||
     process.env.DEEPSEEK_AUTH_TOKEN?.trim();
@@ -110,7 +112,7 @@ export const createAgent = (
     .join("\n\n");
 
   return new DurableAgent({
-    model: createNativeReviewModel,
+    model: createNativeReviewModel(),
     system,
     tools: {
       bash: createBashTool(sandboxId),
