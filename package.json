@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/sync-github-app-webhook.mjs && next build",
+    "build": "next build",
     "start": "next start",
     "check": "ultracite check",
     "fix": "ultracite fix"
