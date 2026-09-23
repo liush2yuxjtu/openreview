@@ -10,3 +10,14 @@ Use /verify skill every time BEFORE we make a PR
 - Do not open a PR on `FAIL` or `BLOCKED`. `SKIP` is only valid when the skill says no executable runtime behavior applies.
 
 <!-- verify-shift-left:end -->
+
+<!-- vercel-deploy-budget:start -->
+## Vercel deploy budget
+
+Every push triggers a billed Vercel build: `main` builds production, and other branches build previews (kept on for this project because preview links are used for review).
+
+- Batch work: do not push after every small change. Accumulate related commits locally and push once per review-ready state; land them on `main` in one squash merge.
+- Do not push doc-only or agent-config-only changes (`*.md`, `.agents/`, `.claude/`) on their own; let them ride with the next real code change.
+- Do not run `vercel deploy` or `vercel --prod` unless the user explicitly asks for a deploy.
+- If a build fails, reproduce and fix it locally with `/verify` before pushing again. Never push repeatedly just to see whether the Vercel build passes.
+<!-- vercel-deploy-budget:end -->
